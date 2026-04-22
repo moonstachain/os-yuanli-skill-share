@@ -35,11 +35,11 @@
 
 `git clone` → 一个命令 → 得到可用 workspace。
 
-- [ ] bin/os-yuanli-init（交互式向导）
-- [ ] bin/os-yuanli-doctor（环境检查）
-- [ ] bin/os-yuanli-audit（skill 自审）
-- [ ] CI：protocol schema 校验 + template fill 校验
-- [ ] Golden-path 测试
+- [x] bin/os-yuanli-init（交互式向导 + `--non-interactive` for CI）
+- [x] bin/os-yuanli-doctor（环境检查）
+- [x] bin/os-yuanli-audit（repo 自审 + workspace 合规审计）
+- [x] CI：GitHub Actions 跑 doctor + audit + golden-path
+- [x] Golden-path：init → task → audit 正反两路
 
 ## M4 · v1.0 · Reference Implementations & Docs
 

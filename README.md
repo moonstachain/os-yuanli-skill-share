@@ -14,7 +14,18 @@
 
 它不替代你已有的 skill / agent / 工具链，而是在它们之上加一层**决策骨架**，让复杂任务不跳步、不漂移、不假完成。
 
-## 安装
+## 快速开始（v0.4+）
+
+```bash
+git clone https://github.com/moonstachain/os-yuanli-skill-share.git
+cd os-yuanli-skill-share
+pip install -r requirements.txt   # 可选：pyyaml
+bin/os-yuanli-doctor              # 环境检查
+bin/os-yuanli-init --workspace ./my-workspace  # 交互式向导
+bin/os-yuanli-audit --workspace ./my-workspace # 合规审计
+```
+
+## 安装为 skill
 
 ### Claude Code（推荐）
 

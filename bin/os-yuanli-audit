@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""
+os-yuanli-audit — 协议合规审计。
+
+对仓库本身、或指定 workspace 做协议合规检查。
+
+检查项：
+  - protocol 文件都带 Inclusion / Exclusion 段
+  - template 文件 YAML 合法（pyyaml 可用时）
+  - SKILL.md References 链接未失效
+  - workspace 的任务 .md 符合 task-protocol:
+      * frontmatter 必填字段
+      * status 是合法枚举
+      * 5 个 Required Sections 存在
+      * theme 在 themes.yaml 声明中
+      * runtime 在 runtime.yaml 声明中
+      * closed 态必须有 Evolution
+
+退出码：0 通过；1 有违规。
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SKILL_ROOT = REPO_ROOT / "os-yuanli"
+
+STATUS_VALID = {"planning", "pending", "in_progress", "completed",
+                "closed", "blocked", "escalated"}
+REQUIRED_SECTIONS = ["Done Condition", "Why", "How", "Evidence", "Evolution"]
+REQUIRED_FRONTMATTER = ["title", "type", "theme", "status", "priority", "runtime", "created"]
+
+
+def load_yaml_minimal(text: str) -> dict:
+    """无 pyyaml 时的简化解析，仅支持 os-yuanli 的模板结构。"""
+    try:
+        import yaml  # type: ignore
+        return yaml.safe_load(text) or {}
+    except ImportError:
+        pass
+    result: dict[str, Any] = {}
+    current_list: list | None = None
+    current_dict: dict | None = None
+    list_key: str | None = None
+    for line in text.splitlines():
+        s = line.rstrip()
+        if not s or s.lstrip().startswith("#"):
+            continue
+        if not line.startswith(" "):
+            if s.endswith(":"):
+                list_key = s[:-1].strip()
+                result[list_key] = []
+                current_list = result[list_key]
+                current_dict = None
+            else:
+                k, _, v = s.partition(":")
+                result[k.strip()] = v.strip().strip('"')
+        elif s.lstrip().startswith("- "):
+            if current_list is None:
+                continue
+            current_dict = {}
+            current_list.append(current_dict)
+            rest = s.lstrip()[2:]
+            if ":" in rest:
+                k, _, v = rest.partition(":")
+                current_dict[k.strip()] = v.strip().strip('"')
+        else:
+            if current_dict is None:
+                continue
+            k, _, v = s.strip().partition(":")
+            current_dict[k.strip()] = v.strip().strip('"')
+    return result
+
+
+def parse_frontmatter(text: str) -> tuple[dict, str]:
+    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
+    if not m:
+        return {}, text
+    return load_yaml_minimal(m.group(1)), m.group(2)
+
+
+def audit_protocols(findings: list[str]) -> None:
+    for p in sorted((SKILL_ROOT / "protocols").glob("*.md")):
+        text = p.read_text(encoding="utf-8")
+        if "## Inclusion" not in text:
+            findings.append(f"[protocol] {p.name} 缺 ## Inclusion 段")
+        if "## Exclusion" not in text:
+            findings.append(f"[protocol] {p.name} 缺 ## Exclusion 段")
+
+
+def audit_templates(findings: list[str]) -> None:
+    for p in sorted((SKILL_ROOT / "templates").glob("*.yaml.template")):
+        text = p.read_text(encoding="utf-8")
+        try:
+            load_yaml_minimal(text)
+        except Exception as e:
+            findings.append(f"[template] {p.name} YAML 解析失败: {e}")
+
+
+def audit_skill_refs(findings: list[str]) -> None:
+    skill_md = SKILL_ROOT / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    for m in re.finditer(r"\]\(([^)]+\.md|[^)]+\.template|[^)]+\.yaml\.template)\)", text):
+        ref = m.group(1)
+        if ref.startswith("http"):
+            continue
+        target = (SKILL_ROOT / ref).resolve()
+        if not target.exists():
+            findings.append(f"[skill] SKILL.md 引用失效: {ref}")
+
+
+def audit_workspace(ws: Path, findings: list[str]) -> None:
+    # load themes / runtime
+    themes_file = ws / "themes.yaml"
+    runtime_file = ws / "runtime.yaml"
+    bridges_file = ws / "bridges.yaml"
+    if not themes_file.exists():
+        findings.append(f"[workspace] 缺 {themes_file}")
+        return
+    themes = load_yaml_minimal(themes_file.read_text(encoding="utf-8"))
+    runtimes = load_yaml_minimal(runtime_file.read_text(encoding="utf-8")) if runtime_file.exists() else {}
+    bridges = load_yaml_minimal(bridges_file.read_text(encoding="utf-8")) if bridges_file.exists() else {}
+
+    valid_themes = {t["id"] for t in themes.get("themes", []) if "id" in t}
+    valid_runtimes = {r["id"] for r in runtimes.get("runtimes", []) if "id" in r}
+
+    # workspace.root — default to ./tasks
+    root_rel = "./tasks"
+    ws_dict = bridges.get("workspace", {})
+    if isinstance(ws_dict, dict) and ws_dict.get("root"):
+        root_rel = ws_dict["root"]
+    tasks_dir = (ws / root_rel.lstrip("./")).resolve()
+    if not tasks_dir.exists():
+        findings.append(f"[workspace] 任务目录不存在: {tasks_dir}")
+        return
+
+    task_count = 0
+    for t in tasks_dir.rglob("*.md"):
+        task_count += 1
+        fm, body = parse_frontmatter(t.read_text(encoding="utf-8"))
+        if not fm:
+            findings.append(f"[task] {t.name}: 缺 frontmatter")
+            continue
+        if fm.get("type") != "task":
+            continue  # not a task file
+
+        for field in REQUIRED_FRONTMATTER:
+            if field not in fm or not fm[field]:
+                findings.append(f"[task] {t.name}: frontmatter 缺 {field}")
+
+        status = fm.get("status")
+        if status and status not in STATUS_VALID:
+            findings.append(f"[task] {t.name}: 非法 status '{status}'")
+
+        theme = fm.get("theme")
+        if theme and valid_themes and theme not in valid_themes:
+            findings.append(f"[task] {t.name}: theme '{theme}' 未在 themes.yaml 声明")
+
+        runtime = fm.get("runtime")
+        if runtime and valid_runtimes and runtime not in valid_runtimes:
+            findings.append(f"[task] {t.name}: runtime '{runtime}' 未在 runtime.yaml 声明")
+
+        for sec in REQUIRED_SECTIONS:
+            if f"## {sec}" not in body:
+                findings.append(f"[task] {t.name}: 缺 ## {sec} 段")
+
+        if status == "closed":
+            m = re.search(r"## Evolution\n+(.*?)(?=\n##|\Z)", body, re.DOTALL)
+            if not m or not m.group(1).strip():
+                findings.append(f"[task] {t.name}: closed 态但 Evolution 为空")
+
+    print(f"  扫描 {task_count} 个任务文件于 {tasks_dir}")
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="os-yuanli 协议合规审计")
+    p.add_argument("--workspace", default=None, help="审计 workspace（可选）")
+    p.add_argument("--skip-repo", action="store_true", help="仅审计 workspace，不检查仓库本身")
+    args = p.parse_args()
+
+    print("── os-yuanli-audit ──")
+    findings: list[str] = []
+
+    if not args.skip_repo:
+        audit_protocols(findings)
+        audit_templates(findings)
+        audit_skill_refs(findings)
+
+    if args.workspace:
+        audit_workspace(Path(args.workspace).resolve(), findings)
+
+    if findings:
+        print()
+        for f in findings:
+            print(f"  ❌ {f}")
+        print(f"\n共 {len(findings)} 条违规")
+        return 1
+    print("  ✅ 全部通过")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

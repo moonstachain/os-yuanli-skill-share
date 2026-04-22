@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""
+os-yuanli-init — 交互式 workspace 初始化向导。
+
+所有问题都映射到 templates/ 里的字段，不自创新字段。
+(per M2 Evolution Note)
+
+用法：
+    bin/os-yuanli-init [--workspace <path>] [--non-interactive]
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+from textwrap import dedent
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SKILL_ROOT = REPO_ROOT / "os-yuanli"
+
+
+def ask(prompt: str, default: str = "", allow_empty: bool = False) -> str:
+    suffix = f" [{default}]" if default else ""
+    while True:
+        raw = input(f"{prompt}{suffix}: ").strip()
+        if raw:
+            return raw
+        if default:
+            return default
+        if allow_empty:
+            return ""
+        print("  (值不能为空)")
+
+
+def ask_choice(prompt: str, options: list[str], default: str) -> str:
+    opts = " / ".join(options)
+    while True:
+        raw = input(f"{prompt} ({opts}) [{default}]: ").strip() or default
+        if raw in options:
+            return raw
+        print(f"  请从 {opts} 中选择")
+
+
+def write_yaml(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    print(f"  ✅ 写入 {path.relative_to(Path.cwd()) if path.is_absolute() else path}")
+
+
+def gen_themes(themes: list[dict]) -> str:
+    lines = ["# themes.yaml — 由 os-yuanli-init 生成\n", "themes:\n"]
+    for t in themes:
+        lines.append(f"  - id: {t['id']}\n")
+        lines.append(f"    label: {t['label']}\n")
+        lines.append(f"    kind: {t['kind']}\n")
+        lines.append(f"    purpose: \"{t['purpose']}\"\n")
+        lines.append(f"    priority_default: {t['priority_default']}\n\n")
+    return "".join(lines)
+
+
+def gen_runtime(runtimes: list[dict]) -> str:
+    lines = ["# runtime.yaml — 由 os-yuanli-init 生成\n", "runtimes:\n"]
+    for r in runtimes:
+        lines.append(f"  - id: {r['id']}\n")
+        lines.append(f"    label: {r['label']}\n")
+        lines.append(f"    mode: {r['mode']}\n")
+        lines.append(f"    brain_tier: {r['brain_tier']}\n")
+        lines.append(f"    cost_class: {r['cost_class']}\n\n")
+    lines.append("escalation:\n  on_b_repeat_failure: manual\n")
+    return "".join(lines)
+
+
+def gen_bridges(workspace_root: str, enabled_bridges: list[str]) -> str:
+    lines = [
+        "# bridges.yaml — 由 os-yuanli-init 生成\n\n",
+        "workspace:\n",
+        f"  root: \"{workspace_root}\"\n",
+        "  format: markdown\n",
+        "  filename_pattern: \"{theme}/{id}-{slug}.md\"\n\n",
+        "bridges:\n",
+        "  - id: local_files_only\n",
+        "    kind: none\n",
+        f"    enabled: {'false' if enabled_bridges else 'true'}\n",
+    ]
+    if "obsidian" in enabled_bridges:
+        lines += [
+            "\n  - id: obsidian\n",
+            "    kind: obsidian\n",
+            "    enabled: true\n",
+            "    truth_source: workspace\n",
+            "    sync_mode: direct\n",
+            "    vault_path: \"<REPLACE-WITH-YOUR-VAULT-PATH>\"\n",
+        ]
+    lines += [
+        "\nbackflow:\n",
+        "  channel_1_local_sync:\n    enabled: true\n    target: workspace\n",
+        "  channel_2_async_remote:\n    enabled: false\n",
+        "  channel_3_external:\n    enabled: false\n",
+    ]
+    return "".join(lines)
+
+
+def interactive_wizard(ws: Path) -> None:
+    print(dedent(f"""\
+        ────────────────────────────────────────────────────────
+        os-yuanli · workspace 初始化向导
+        ────────────────────────────────────────────────────────
+        目标目录：{ws}
+
+        下面 6 个问题会生成你的 themes / runtime / bridges 配置。
+        所有字段都映射到 os-yuanli/templates/ 里的模板。
+        """))
+
+    # --- themes ---
+    print("【1/6】定义主题（战场）。建议 3–7 个。")
+    themes: list[dict] = []
+    while True:
+        tid = ask("  theme id (snake_case，留空结束)", "", allow_empty=True)
+        if not tid:
+            if not themes:
+                print("  至少定义 1 个主题")
+                continue
+            break
+        label = ask("    label（人类可读名）")
+        kind = ask_choice("    kind", ["business", "enabling"], "business")
+        purpose = ask("    purpose（一句话）")
+        pri = ask_choice("    priority_default", ["P0", "P1", "P2", "P3"], "P2")
+        themes.append({"id": tid, "label": label, "kind": kind,
+                       "purpose": purpose, "priority_default": pri})
+
+    # --- runtime ---
+    print("\n【2/6】选择默认 runtime。")
+    runtimes = []
+    default_rt = ask_choice("  默认 runtime", ["claude-code", "codex", "manual"], "claude-code")
+    mode_map = {"claude-code": "local_sync", "codex": "async_remote", "manual": "manual"}
+    runtimes.append({
+        "id": default_rt, "label": default_rt, "mode": mode_map[default_rt],
+        "brain_tier": "B", "cost_class": "medium",
+    })
+    if ask_choice("  是否额外添加 manual runtime（人工升级兜底）", ["y", "n"], "y") == "y":
+        if default_rt != "manual":
+            runtimes.append({"id": "manual", "label": "Human (manual)",
+                             "mode": "manual", "brain_tier": "A", "cost_class": "high"})
+
+    # --- bridges ---
+    print("\n【3/6】外部系统桥接。")
+    enabled_bridges: list[str] = []
+    if ask_choice("  是否启用 Obsidian 桥？", ["y", "n"], "n") == "y":
+        enabled_bridges.append("obsidian")
+    print("  （Notion / 表格 / 项目管理等其他桥请手动编辑 bridges.yaml）")
+
+    # --- workspace ---
+    print("\n【4/6】workspace 根目录。")
+    tasks_root = ask("  任务 .md 存放相对目录", "./tasks")
+
+    # --- daemon ---
+    print("\n【5/6】是否启用 daemon（定时巡检）？")
+    enable_daemon = ask_choice("  默认关闭，M1 通常用不上", ["y", "n"], "n") == "y"
+
+    # --- confirm ---
+    print("\n【6/6】确认写入以下文件：")
+    print(f"  {ws}/themes.yaml")
+    print(f"  {ws}/runtime.yaml")
+    print(f"  {ws}/bridges.yaml")
+    print(f"  {ws}/{tasks_root.lstrip('./')}/  (空目录)")
+    if enable_daemon:
+        print(f"  {ws}/daemon.yaml")
+    if ask_choice("  继续？", ["y", "n"], "y") != "y":
+        print("已取消。")
+        return
+
+    # --- write ---
+    write_yaml(ws / "themes.yaml", gen_themes(themes))
+    write_yaml(ws / "runtime.yaml", gen_runtime(runtimes))
+    write_yaml(ws / "bridges.yaml", gen_bridges(tasks_root, enabled_bridges))
+    (ws / tasks_root.lstrip("./")).mkdir(parents=True, exist_ok=True)
+    print(f"  ✅ 创建 {tasks_root}")
+    if enable_daemon:
+        src = SKILL_ROOT / "templates" / "daemon.template.yaml"
+        (ws / "daemon.yaml").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"  ✅ 复制 daemon.yaml（基于模板，自行编辑 enabled 字段）")
+
+    print(dedent(f"""
+        ────────────────────────────────────────────────────────
+        ✅ 初始化完成
+
+        下一步：
+        1. 检查 {ws}/themes.yaml / runtime.yaml / bridges.yaml
+        2. 跑：bin/os-yuanli-doctor --workspace {ws}
+        3. 从 os-yuanli/templates/task.template.md 创建第一个任务
+        4. 跑：bin/os-yuanli-audit --workspace {ws}
+        ────────────────────────────────────────────────────────
+    """))
+
+
+def non_interactive(ws: Path) -> None:
+    """最小 smoke 配置，供 CI / golden-path 使用。"""
+    themes = [{"id": "demo", "label": "Demo", "kind": "business",
+               "purpose": "smoke test", "priority_default": "P2"}]
+    runtimes = [{"id": "claude-code", "label": "Claude Code", "mode": "local_sync",
+                 "brain_tier": "B", "cost_class": "medium"}]
+    write_yaml(ws / "themes.yaml", gen_themes(themes))
+    write_yaml(ws / "runtime.yaml", gen_runtime(runtimes))
+    write_yaml(ws / "bridges.yaml", gen_bridges("./tasks", []))
+    (ws / "tasks").mkdir(parents=True, exist_ok=True)
+    print("  ✅ non-interactive init 完成")
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="os-yuanli workspace 初始化向导")
+    p.add_argument("--workspace", default=".", help="workspace 根目录（默认当前目录）")
+    p.add_argument("--non-interactive", action="store_true", help="CI 用最小 smoke 配置")
+    args = p.parse_args()
+
+    ws = Path(args.workspace).resolve()
+    ws.mkdir(parents=True, exist_ok=True)
+    os.chdir(ws)
+
+    # 拒绝覆盖已有配置
+    existing = [f for f in ("themes.yaml", "runtime.yaml", "bridges.yaml") if (ws / f).exists()]
+    if existing and not args.non_interactive:
+        print(f"⚠️  {ws} 已存在配置：{existing}")
+        print("   请手动编辑或删除后重跑。")
+        return 1
+
+    if args.non_interactive:
+        non_interactive(ws)
+    else:
+        try:
+            interactive_wizard(ws)
+        except (KeyboardInterrupt, EOFError):
+            print("\n已取消。")
+            return 130
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

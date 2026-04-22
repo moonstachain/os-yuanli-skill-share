@@ -1,0 +1,7 @@
+interface:
+  display_name: "OS-原力"
+  short_description: "按治理OS与工作OS方法接管复杂任务的统一入口"
+  default_prompt: "使用 $os-yuanli 按原力OS接管这个任务。"
+
+policy:
+  allow_implicit_invocation: false

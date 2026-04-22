@@ -1,0 +1,10 @@
+# runtime.yaml — 由 os-yuanli-init 生成
+runtimes:
+  - id: claude-code
+    label: Claude Code
+    mode: local_sync
+    brain_tier: B
+    cost_class: medium
+
+escalation:
+  on_b_repeat_failure: manual

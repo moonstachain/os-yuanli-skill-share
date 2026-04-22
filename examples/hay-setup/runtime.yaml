@@ -1,0 +1,33 @@
+# HAY · runtime.yaml（作者个人实例）
+
+runtimes:
+  - id: claude-code
+    label: Claude Code (local)
+    mode: local_sync
+    brain_tier: B
+    cost_class: medium
+    can_promote_to: manual
+
+  - id: codex
+    label: OpenAI Codex (async)
+    mode: async_remote
+    brain_tier: B
+    cost_class: medium
+    sla_minutes: 60
+
+  - id: manual
+    label: HAY (human)
+    mode: manual
+    brain_tier: A
+    cost_class: high
+
+  # C-tier 专用：批量机械查询（wiki-lint / 去重 / 归档）
+  - id: haiku-batch
+    label: Claude Haiku batch
+    mode: local_sync
+    brain_tier: C
+    cost_class: low
+
+escalation:
+  on_b_repeat_failure: manual
+  on_task_simpler_than_expected: haiku-batch

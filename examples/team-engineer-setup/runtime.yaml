@@ -1,0 +1,26 @@
+# Team Engineer · runtime.yaml
+
+runtimes:
+  - id: claude-code
+    label: Claude Code (local)
+    mode: local_sync
+    brain_tier: B
+    cost_class: medium
+    can_promote_to: manual
+
+  - id: codex
+    label: OpenAI Codex (async remote)
+    mode: async_remote
+    brain_tier: B
+    cost_class: medium
+    sla_minutes: 45
+
+  - id: manual
+    label: Human (escalation)
+    mode: manual
+    brain_tier: A
+    cost_class: high
+
+escalation:
+  on_b_repeat_failure: manual
+  on_task_simpler_than_expected: null

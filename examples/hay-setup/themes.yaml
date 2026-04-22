@@ -1,0 +1,40 @@
+# HAY · themes.yaml（作者个人实例 · 仅作演示）
+
+themes:
+  # --- 业务主题（战场） ---
+  - id: quant
+    label: 量化投资
+    kind: business
+    purpose: 因子研究、策略开发、实盘监控
+    priority_default: P1
+
+  - id: macro
+    label: 宏观分析
+    kind: business
+    purpose: 周期研判、大类资产配置
+    priority_default: P2
+
+  - id: chuangye
+    label: 原力创业
+    kind: business
+    purpose: 战略咨询产品化与客户交付
+    priority_default: P1
+
+  - id: liuliang
+    label: 流量 IP
+    kind: business
+    purpose: 内容分发、GEO 可见性、影响力资产沉淀
+    priority_default: P2
+
+  # --- 使能主题（修路） ---
+  - id: zhiku
+    label: 智库
+    kind: enabling
+    purpose: Wiki 体系建设与知识晶体沉淀
+    priority_default: P2
+
+  - id: zhongtai
+    label: 中台
+    kind: enabling
+    purpose: 原力 OS 架构演进与 skill 开发
+    priority_default: P2

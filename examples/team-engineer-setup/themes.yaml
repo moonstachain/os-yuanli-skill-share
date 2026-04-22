@@ -1,0 +1,20 @@
+# Team Engineer · themes.yaml
+
+themes:
+  - id: product_dev
+    label: 产品开发
+    kind: business
+    purpose: 按期交付 feature，维持主干可部署
+    priority_default: P1
+
+  - id: platform_ops
+    label: 基建治理
+    kind: enabling
+    purpose: 让团队的流水线、监控、工具保持顺滑
+    priority_default: P2
+
+  - id: customer_delivery
+    label: 客户交付
+    kind: business
+    purpose: 按时交付 + 沉淀可复用案例
+    priority_default: P1

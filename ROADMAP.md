@@ -22,12 +22,14 @@
 
 让同事按自己的环境实例化。
 
-- [ ] templates/themes.yaml.template
-- [ ] templates/runtime.yaml.template
-- [ ] templates/bridges.yaml.template
-- [ ] templates/cockpit.template.md
-- [ ] templates/task.template.md
-- [ ] templates/daemon.template.yaml（optional）
+- [x] templates/themes.yaml.template
+- [x] templates/runtime.yaml.template
+- [x] templates/bridges.yaml.template
+- [x] templates/cockpit.template.md
+- [x] templates/task.template.md
+- [x] templates/daemon.template.yaml（optional）
+- [x] SKILL.md Templates 栏注册
+- [x] 每个模板反向引用对应 protocol 的 Exclusion 段
 
 ## M3 · v0.4 · Onboarding CLI
 

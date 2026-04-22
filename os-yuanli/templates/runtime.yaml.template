@@ -1,0 +1,66 @@
+# ============================================================================
+# runtime.yaml — 执行环境声明
+# ----------------------------------------------------------------------------
+# 实例化协议：protocols/brain-tiers.md
+# 填补 Exclusion：brain-tiers 不规定用哪家模型，由本文件声明。
+#
+# 一个 task.md 的 frontmatter runtime 字段必须是这里定义的一个 id。
+# ============================================================================
+
+runtimes:
+
+  # --- 必填字段 --------------------------------------------------------------
+  # id:         机器标识符
+  # label:      人类可读名称
+  # mode:       local_sync | async_remote | manual
+  #             （对齐 backflow-channels.md 的通道类型）
+  # brain_tier: A | B | C        （对齐 brain-tiers.md）
+  #             A = Strategy Brain
+  #             B = Execute Brain
+  #             C = Knowledge Brain
+  # ---------------------------------------------------------------------------
+
+  # 示例 1 · 本地同步 · Execute Brain
+  - id: claude-code
+    label: Claude Code (local)
+    mode: local_sync
+    brain_tier: B
+    # 可选字段
+    model_hint: claude-sonnet-4-6   # 提示，不强制
+    can_promote_to: A               # 在需要时可升级到 A tier
+    cost_class: medium
+
+  # 示例 2 · 异步远程 · Execute Brain
+  - id: codex
+    label: OpenAI Codex (remote)
+    mode: async_remote
+    brain_tier: B
+    model_hint: gpt-5-codex
+    can_promote_to: null
+    cost_class: medium
+    sla_minutes: 30                 # 超过即触发 blocked（见 backflow-channels）
+
+  # 示例 3 · 人工 · Strategy Brain
+  - id: manual
+    label: Human (manual)
+    mode: manual
+    brain_tier: A
+    cost_class: high
+
+# ============================================================================
+# 升级 / 降级策略（可选，默认按 brain-tiers.md 规则）
+# ============================================================================
+escalation:
+  # B 连续两次低质量 → 升级到哪个 runtime
+  on_b_repeat_failure: manual
+  # B 发现任务实际是 C 级 → 降级
+  on_task_simpler_than_expected: null
+
+# ============================================================================
+# 反模式
+# ----------------------------------------------------------------------------
+# × 所有 runtime 都配 brain_tier: A —— 成本会失控。
+# × mode 随意填（如 mode: fast）—— 必须是 local_sync / async_remote / manual 三选一，
+#   否则回流协议无法选通道。
+# × can_promote_to 配成"高于自己的不可达 runtime" —— 会造成死循环。
+# ============================================================================

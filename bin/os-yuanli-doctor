@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""
+os-yuanli-doctor — 环境检查。
+
+检查：
+  - Python 版本
+  - 可选依赖（pyyaml）
+  - skill 文件完整性
+  - workspace 配置（若 --workspace 给出）
+
+退出码：0 全通过；1 有 error；2 仅 warning。
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SKILL_ROOT = REPO_ROOT / "os-yuanli"
+
+REQUIRED_SKILL_FILES = [
+    "SKILL.md",
+    "references/constitution.md",
+    "references/task-family-map.md",
+    "references/output-contract.md",
+    "protocols/task-protocol.md",
+    "protocols/router-five-axes.md",
+    "protocols/brain-tiers.md",
+    "protocols/guides-and-sensors.md",
+    "protocols/evolution-flywheel.md",
+    "protocols/truth-hierarchy.md",
+    "protocols/backflow-channels.md",
+    "protocols/layer-dependencies.md",
+    "templates/themes.yaml.template",
+    "templates/runtime.yaml.template",
+    "templates/bridges.yaml.template",
+    "templates/task.template.md",
+]
+
+
+class Report:
+    def __init__(self) -> None:
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+        self.oks: list[str] = []
+
+    def ok(self, msg: str) -> None:
+        self.oks.append(msg)
+
+    def warn(self, msg: str) -> None:
+        self.warnings.append(msg)
+
+    def error(self, msg: str) -> None:
+        self.errors.append(msg)
+
+    def print(self) -> int:
+        for m in self.oks:
+            print(f"  ✅ {m}")
+        for m in self.warnings:
+            print(f"  ⚠️  {m}")
+        for m in self.errors:
+            print(f"  ❌ {m}")
+        print()
+        print(f"总结：{len(self.oks)} 通过 / {len(self.warnings)} 警告 / {len(self.errors)} 错误")
+        if self.errors:
+            return 1
+        if self.warnings:
+            return 2
+        return 0
+
+
+def check_python(r: Report) -> None:
+    if sys.version_info < (3, 9):
+        r.error(f"Python 3.9+ 必需（当前 {sys.version_info.major}.{sys.version_info.minor}）")
+    else:
+        r.ok(f"Python {sys.version_info.major}.{sys.version_info.minor}")
+
+
+def check_pyyaml(r: Report) -> None:
+    if importlib.util.find_spec("yaml") is None:
+        r.warn("未安装 pyyaml — audit 命令会使用简化解析器。安装：pip install pyyaml")
+    else:
+        r.ok("pyyaml 可用")
+
+
+def check_skill_files(r: Report) -> None:
+    for rel in REQUIRED_SKILL_FILES:
+        p = SKILL_ROOT / rel
+        if p.exists():
+            r.ok(f"skill: {rel}")
+        else:
+            r.error(f"缺失 skill 文件: {rel}")
+
+
+def check_workspace(ws: Path, r: Report) -> None:
+    print(f"  → workspace: {ws}")
+    for name in ("themes.yaml", "runtime.yaml", "bridges.yaml"):
+        p = ws / name
+        if p.exists():
+            r.ok(f"workspace: {name}")
+        else:
+            r.error(f"workspace 缺失: {name}（跑 os-yuanli-init 生成）")
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="os-yuanli 环境检查")
+    p.add_argument("--workspace", default=None, help="检查 workspace 配置（可选）")
+    args = p.parse_args()
+
+    r = Report()
+    print("── os-yuanli-doctor ──")
+    check_python(r)
+    check_pyyaml(r)
+    check_skill_files(r)
+    if args.workspace:
+        check_workspace(Path(args.workspace).resolve(), r)
+    return r.print()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

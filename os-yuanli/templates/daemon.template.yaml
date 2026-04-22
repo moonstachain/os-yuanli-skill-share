@@ -1,0 +1,89 @@
+# ============================================================================
+# daemon.yaml — 定时任务 / 守护进程（可选）
+# ----------------------------------------------------------------------------
+# 实例化协议：protocols/guides-and-sensors.md（Sensors · 定时健康巡检）
+# 填补 Exclusion：guides-and-sensors 不规定 sensor 用 hook / CI / cron 哪种实现。
+#
+# 这是**可选**组件：最小 setup 可以不开启任何 daemon。
+# ============================================================================
+
+enabled: false                     # 整体开关，默认关闭
+
+# ---------------------------------------------------------------------------
+# scheduler · 调度器选择
+# ---------------------------------------------------------------------------
+scheduler:
+  kind: cron                       # cron | systemd_timer | launchd | github_actions
+  timezone: "Asia/Shanghai"
+
+# ---------------------------------------------------------------------------
+# jobs · 定时任务清单
+# ---------------------------------------------------------------------------
+jobs:
+
+  # --- 示例 1 · 阻塞告警（推荐默认开启）--------------------------------------
+  - id: blocked_alert
+    description: 检测 blocked 超过 3 天的任务
+    schedule: "0 9 * * *"          # 每天 09:00
+    action:
+      kind: sensor
+      sensor_id: blocked_aging
+    alert:
+      threshold_days: 3
+      channel: console             # console | file | webhook | email
+
+  # --- 示例 2 · 周报生成 ----------------------------------------------------
+  - id: weekly_report
+    description: 每周五汇总本周 completed 任务
+    schedule: "0 18 * * 5"
+    action:
+      kind: generate_report
+      template: reports/weekly.md.template
+      output_dir: reports/
+
+  # --- 示例 3 · 健康巡检 ---------------------------------------------------
+  - id: workspace_health
+    description: 扫描 workspace 目录的协议合规
+    schedule: "0 2 * * 0"          # 每周日凌晨
+    action:
+      kind: audit
+      check:
+        - missing_frontmatter
+        - illegal_status_value
+        - theme_not_in_themes_yaml
+        - task_with_no_done_condition
+        - closed_without_evolution
+
+  # --- 示例 4 · 外部桥 diff（如果启用 mirror 桥）-----------------------------
+  - id: bridge_diff
+    description: 检测 workspace 与外部系统的不一致
+    enabled: false
+    schedule: "*/30 * * * *"       # 每 30 分钟
+    action:
+      kind: bridge_diff
+      bridge_id: "<bridges.yaml 中的桥 id>"
+    alert:
+      on_diff: webhook
+
+# ---------------------------------------------------------------------------
+# redlines · 红线（触发即停机）
+# ---------------------------------------------------------------------------
+redlines:
+  - id: consecutive_failure
+    description: 某个 job 连续失败 N 次
+    n: 3
+    action: disable_job_and_alert
+
+  - id: long_aging
+    description: 某任务 blocked 超过 N 天
+    n: 14
+    action: escalate_to_manual
+
+# ============================================================================
+# 反模式
+# ----------------------------------------------------------------------------
+# × 把 daemon 当成"万能自动化入口"，什么都往里塞 —— 请把业务逻辑留在任务里。
+# × schedule 太频繁（秒级）—— 换成 hook 或 file watch。
+# × daemon 直接修改任务 .md 的 Evolution —— 违反协议，Evolution 必须人 / runtime 显式写。
+# × 没有 alert channel 的 job —— 默默失败等于没 sensor。
+# ============================================================================

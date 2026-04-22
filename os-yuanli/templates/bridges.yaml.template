@@ -1,0 +1,96 @@
+# ============================================================================
+# bridges.yaml — 回流与外部系统桥接
+# ----------------------------------------------------------------------------
+# 实例化协议：protocols/backflow-channels.md
+# 填补 Exclusion：backflow-channels 不绑定具体 adapter（OB / Notion / Feishu / Linear 等），
+#                 由本文件声明使用哪些桥。
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# workspace · 任务 .md 存放根目录
+# 这是 Channel 1 · Local Sync 的落地点。
+# ---------------------------------------------------------------------------
+workspace:
+  root: "./tasks"            # 相对于项目根；也可以是绝对路径
+  format: markdown
+  filename_pattern: "{theme}/{id}-{slug}.md"
+  # filename_pattern 变量：{theme} {id} {slug} {YYYY} {MM} {DD}
+
+# ---------------------------------------------------------------------------
+# bridges · 外部系统桥接（Channel 3）
+# 每个桥必须声明：
+#   - id / kind / truth_source / sync_mode
+# ---------------------------------------------------------------------------
+bridges:
+
+  # 示例 1 · 纯本地 · 不桥接外部（最小 setup）
+  - id: local_files_only
+    kind: none
+    enabled: true
+    # 其他桥都不启用时，所有回流只走 Channel 1
+
+  # 示例 2 · Obsidian Vault（如果你用 OB）
+  - id: obsidian
+    kind: obsidian
+    enabled: false
+    truth_source: workspace          # workspace | external | mirror
+    sync_mode: direct                # direct | cli | plugin
+    vault_path: "/path/to/vault"     # 绝对路径
+    # 注意：OB 只是一个阅读视图。回流真源还是 workspace.root。
+
+  # 示例 3 · Notion 数据库
+  - id: notion
+    kind: notion
+    enabled: false
+    truth_source: workspace
+    sync_mode: mcp                   # mcp | api | manual
+    database_id: "<notion-db-id>"
+    # 冲突处理：truth_source 为 workspace 时，Notion 端的编辑会被覆盖。
+
+  # 示例 4 · 表格工具（Feishu / Airtable / 企业工具）
+  - id: tables
+    kind: tables_generic
+    enabled: false
+    truth_source: mirror             # 双向同步，定时 diff
+    sync_mode: mcp
+    table_id: "<table-id>"
+    fields_map:                      # task 字段 → 表格列
+      title: 标题
+      status: 状态
+      theme: 主题
+      priority: 优先级
+      owner: 负责人
+
+  # 示例 5 · 项目管理工具（Linear / Jira / GitHub Projects）
+  - id: project_mgmt
+    kind: project_mgmt_generic
+    enabled: false
+    truth_source: external           # 真源在外部，workspace 做镜像
+    sync_mode: api
+    project_id: "<project-id>"
+    # 这种情况下任务 .md 由同步脚本从外部拉取生成，人不直接编辑。
+
+# ---------------------------------------------------------------------------
+# backflow · 回流通道映射（对齐 backflow-channels.md）
+# ---------------------------------------------------------------------------
+backflow:
+  channel_1_local_sync:
+    enabled: true
+    target: workspace
+  channel_2_async_remote:
+    enabled: false
+    runtime_ids: [codex]             # 哪些 runtime 使用这条通道
+    pull_strategy: manual            # manual | git_pull | cron
+    sla_minutes: 30
+  channel_3_external:
+    enabled: false
+    bridge_ids: []                   # 启用哪些外部桥
+
+# ============================================================================
+# 反模式
+# ----------------------------------------------------------------------------
+# × 两个桥同时声明 truth_source: workspace —— 多头真源会导致同步冲突。
+# × truth_source 为 external 但 workspace 里让人手改任务 —— 改动会被拉取覆盖。
+# × 启用 mirror 但不配 diff 告警 —— 悄悄发生双源漂移。
+# × 把桥接工具的凭证直接写在本文件里 —— 用环境变量或外部 secret 管理。
+# ============================================================================

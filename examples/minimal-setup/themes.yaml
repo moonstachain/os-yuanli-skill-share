@@ -1,0 +1,8 @@
+# themes.yaml — 由 os-yuanli-init 生成
+themes:
+  - id: demo
+    label: Demo
+    kind: business
+    purpose: "smoke test"
+    priority_default: P2
+

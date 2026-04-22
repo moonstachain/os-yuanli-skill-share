@@ -43,13 +43,13 @@
 
 ## M4 · v1.0 · Reference Implementations & Docs
 
-- [ ] examples/minimal-setup/
-- [ ] examples/team-engineer-setup/
-- [ ] examples/hay-setup/（作者个人实例，标注清楚）
-- [ ] docs/quickstart.md（30 分钟 onboarding）
-- [ ] docs/concepts.md
-- [ ] docs/adapter-guide.md
-- [ ] docs/faq.md
+- [x] examples/minimal-setup/
+- [x] examples/team-engineer-setup/
+- [x] examples/hay-setup/（作者个人实例，标注清楚）
+- [x] docs/quickstart.md（30 分钟 onboarding）
+- [x] docs/concepts.md
+- [x] docs/adapter-guide.md
+- [x] docs/faq.md
 
 ## 不做的事
 

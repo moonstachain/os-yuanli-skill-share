@@ -1,0 +1,50 @@
+# HAY · daemon.yaml（作者个人实例）
+
+enabled: true
+
+scheduler:
+  kind: cron
+  timezone: "Asia/Shanghai"
+
+jobs:
+  - id: blocked_alert
+    description: 检测 blocked > 3 天的任务
+    schedule: "0 9 * * *"
+    action:
+      kind: sensor
+      sensor_id: blocked_aging
+    alert:
+      threshold_days: 3
+      channel: webhook                  # 推到个人 IM
+
+  - id: quant_data_pull
+    description: 每日拉取量化净值数据
+    schedule: "0 17 * * 1-5"            # 交易日下午 5 点
+    action:
+      kind: external_pull
+      target: tasks/quant/data/
+
+  - id: weekly_report
+    description: 每周五汇总本周 completed 任务
+    schedule: "0 18 * * 5"
+    action:
+      kind: generate_report
+      template: reports/weekly.md.template
+      output_dir: reports/
+
+  - id: monthly_skill_audit
+    description: 每月跑一次 skill 使用审计
+    schedule: "0 3 1 * *"
+    action:
+      kind: audit
+      check:
+        - unused_skills
+        - failing_sensors
+
+redlines:
+  - id: consecutive_failure
+    n: 3
+    action: disable_job_and_alert
+  - id: long_aging
+    n: 14
+    action: escalate_to_manual

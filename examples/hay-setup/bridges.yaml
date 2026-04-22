@@ -1,0 +1,44 @@
+# HAY · bridges.yaml（作者个人实例）
+
+workspace:
+  root: "./tasks"                     # git 仓库里的目录，真源
+  format: markdown
+  filename_pattern: "{theme}/{YYYY}/{id}-{slug}.md"
+
+bridges:
+  - id: local_files_only
+    kind: none
+    enabled: true
+
+  - id: obsidian
+    kind: obsidian
+    enabled: true
+    truth_source: workspace             # OB 只是阅读视图
+    sync_mode: direct                   # 通过文件系统直接读
+    vault_path: "/Users/hay/Vault"      # 实际路径请改
+
+  - id: feishu_tables
+    kind: tables_generic
+    enabled: true
+    truth_source: mirror                # workspace 与飞书双向同步
+    sync_mode: mcp
+    table_id: "<from env>"
+    fields_map:
+      title: 标题
+      theme: 主题
+      status: 状态
+      priority: 优先级
+      outcome: 结果
+
+backflow:
+  channel_1_local_sync:
+    enabled: true
+    target: workspace
+  channel_2_async_remote:
+    enabled: true
+    runtime_ids: [codex]
+    pull_strategy: git_pull
+    sla_minutes: 60
+  channel_3_external:
+    enabled: true
+    bridge_ids: [obsidian, feishu_tables]

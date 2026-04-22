@@ -1,0 +1,20 @@
+# bridges.yaml — 由 os-yuanli-init 生成
+
+workspace:
+  root: "./tasks"
+  format: markdown
+  filename_pattern: "{theme}/{id}-{slug}.md"
+
+bridges:
+  - id: local_files_only
+    kind: none
+    enabled: true
+
+backflow:
+  channel_1_local_sync:
+    enabled: true
+    target: workspace
+  channel_2_async_remote:
+    enabled: false
+  channel_3_external:
+    enabled: false

@@ -1,0 +1,31 @@
+# Team Engineer · bridges.yaml
+
+workspace:
+  root: "./tasks"
+  format: markdown
+  filename_pattern: "{theme}/{YYYY}-{MM}/{id}-{slug}.md"
+
+bridges:
+  - id: local_files_only
+    kind: none
+    enabled: true
+
+  - id: notion
+    kind: notion
+    enabled: false                    # 改为 true 后填入 database_id
+    truth_source: workspace           # 真源是 git 仓库，Notion 是镜像
+    sync_mode: mcp
+    database_id: "<REPLACE-ME>"
+
+backflow:
+  channel_1_local_sync:
+    enabled: true
+    target: workspace
+  channel_2_async_remote:
+    enabled: true
+    runtime_ids: [codex]
+    pull_strategy: git_pull
+    sla_minutes: 45
+  channel_3_external:
+    enabled: false
+    bridge_ids: [notion]              # 切换到 true 时同步启用
